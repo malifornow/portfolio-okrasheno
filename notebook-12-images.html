@@ -1,0 +1,115 @@
+<!-- Отдельный HTML-блок. 12 изображений = 6 двусторонних листов, обложки включены. -->
+<div class="mkhv-notebook" tabindex="0" aria-label="Блокнот: используйте стрелки для перелистывания">
+  <div class="nb-stage"><div class="nb-book"></div></div>
+  <div class="nb-controls">
+    <button type="button" class="nb-prev" aria-label="Предыдущий разворот">←</button>
+    <span class="nb-counter" aria-live="polite"></span>
+    <button type="button" class="nb-next" aria-label="Следующий разворот">→</button>
+  </div>
+</div>
+<style>
+.mkhv-notebook{--nb-time:850ms;--nb-paper:#EDEDEB;--nb-ratio:1.4;box-sizing:border-box;width:100%;max-width:620px;margin:0 auto;padding:25px 20px;color:#262626;font-family:Arial,sans-serif}
+.mkhv-notebook *{box-sizing:border-box}
+.mkhv-notebook .nb-stage{position:relative;width:100%;aspect-ratio:var(--nb-ratio);perspective:1800px;touch-action:pan-y}
+.mkhv-notebook .nb-book{position:absolute;inset:0;transform-style:preserve-3d;transition:transform var(--nb-time) ease}
+.mkhv-notebook.nb-front .nb-book{transform:translateX(-25%)}
+.mkhv-notebook.nb-back .nb-book{transform:translateX(25%)}
+.mkhv-notebook .nb-sheet{position:absolute;left:50%;top:0;width:50%;height:100%;transform-origin:left center;transform-style:preserve-3d;transition:transform var(--nb-time) cubic-bezier(.58,.02,.28,1);transform:rotateY(0deg)}
+.mkhv-notebook .nb-sheet.nb-turned{transform:rotateY(-180deg)}
+.mkhv-notebook .nb-face{position:absolute;inset:0;background:var(--nb-paper);overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 0 0 1px #0002;display:grid;place-items:center;font-size:12px}
+.mkhv-notebook .nb-reverse{transform:rotateY(180deg)}
+.mkhv-notebook .nb-face img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#EDEDEB}
+.mkhv-notebook .nb-face:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,#0002,transparent 9%)}
+.mkhv-notebook .nb-reverse:after{background:linear-gradient(270deg,#0002,transparent 9%)}
+.mkhv-notebook .nb-controls{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:24px}
+.mkhv-notebook button{border:1px solid #262626;border-radius:50%;background:transparent;color:inherit;width:40px;height:40px;cursor:pointer;font-size:22px;padding:0}
+.mkhv-notebook button:disabled{opacity:.3;cursor:default}
+.mkhv-notebook .nb-counter{min-width:135px;text-align:center;font-size:12px}
+@media(prefers-reduced-motion:reduce){.mkhv-notebook .nb-sheet,.mkhv-notebook .nb-book{transition-duration:1ms!important}}
+</style>
+<script>
+(function(){
+  'use strict';
+  const root=document.currentScript.previousElementSibling.previousElementSibling;
+  const book=root.querySelector('.nb-book'),stage=root.querySelector('.nb-stage');
+  const prev=root.querySelector('.nb-prev'),next=root.querySelector('.nb-next');
+  const counter=root.querySelector('.nb-counter');
+  /* Вставьте прямые HTTPS-ссылки на изображения между кавычками.
+     Порядок: лицевая обложка, страницы по порядку, задняя обложка.
+     Все изображения желательно подготовить в одинаковых пропорциях. */
+  const pages=[
+    '', // 1: лицевая обложка
+    '', // 2
+    '', // 3
+    '', // 4
+    '', // 5
+    '', // 6
+    '', // 7
+    '', // 8
+    '', // 9
+    '', // 10
+    '', // 11
+    ''  // 12: задняя обложка
+  ];
+  const sheets=[];
+  let position=0,locked=false,touch=null;
+  function face(n,back){
+    const el=document.createElement('div');el.className='nb-face'+(back?' nb-reverse':'');
+    const name=n===0?'Лицевая обложка':n===pages.length-1?'Задняя обложка':'Страница '+(n+1);
+    el.textContent=name;
+    if(pages[n]){
+      const img=new Image();img.alt=name;img.decoding='async';img.src=pages[n];
+      img.addEventListener('error',()=>img.remove());el.appendChild(img);
+      if(n===0)img.addEventListener('load',()=>{
+        if(img.naturalHeight)root.style.setProperty('--nb-ratio',String(2*img.naturalWidth/img.naturalHeight));
+      });
+    }
+    return el;
+  }
+  for(let i=0;i<pages.length;i+=2){
+    const sheet=document.createElement('div');sheet.className='nb-sheet';
+    sheet.append(face(i,false),face(i+1,true));book.appendChild(sheet);sheets.push(sheet);
+  }
+  function render(active=-1){
+    sheets.forEach((s,i)=>{
+      s.classList.toggle('nb-turned',i<position);
+      s.style.zIndex=i===active?'100':String(i<position?i+2:sheets.length-i+2);
+    });
+    root.classList.toggle('nb-front',position===0);
+    root.classList.toggle('nb-back',position===sheets.length);
+    prev.disabled=locked||position===0;next.disabled=locked;
+    const atEnd=position===sheets.length;
+    next.setAttribute('aria-label',atEnd?'Вернуться к началу':'Следующий разворот');
+    next.title=atEnd?'Вернуться к началу':'Следующий разворот';
+    counter.textContent=position===0?'Обложка':atEnd?'Задняя обложка':position*2+'–'+(position*2+1)+' / '+pages.length;
+  }
+  function duration(){
+    if(matchMedia('(prefers-reduced-motion: reduce)').matches)return 1;
+    const s=getComputedStyle(root).getPropertyValue('--nb-time').trim();
+    return (parseFloat(s)||850)*(s.endsWith('ms')?1:1000);
+  }
+  function move(delta){
+    if(locked)return;
+    if(delta<0&&position===0)return;
+    const restarting=delta>0&&position===sheets.length;
+    const active=restarting?0:delta>0?position:position-1;
+    position=restarting?0:position+delta;
+    locked=true;render(active);
+    // После задней обложки все листы плавно возвращаются к началу.
+    setTimeout(()=>{locked=false;render()},duration()+50);
+  }
+  prev.addEventListener('click',()=>move(-1));next.addEventListener('click',()=>move(1));
+  root.addEventListener('keydown',e=>{
+    if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();move(e.key==='ArrowLeft'?-1:1)}
+  });
+  stage.addEventListener('touchstart',e=>{touch={x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY}},{passive:true});
+  stage.addEventListener('touchend',e=>{
+    if(!touch)return;const dx=e.changedTouches[0].clientX-touch.x,dy=e.changedTouches[0].clientY-touch.y;
+    touch=null;if(Math.abs(dx)>42&&Math.abs(dx)>Math.abs(dy))move(dx<0?1:-1);
+  },{passive:true});
+  stage.addEventListener('touchcancel',()=>{touch=null},{passive:true});
+  render();
+})();
+</script>
+
+
